@@ -1,24 +1,59 @@
-// Robot Romance: a one-line pickup line aimed at an AI.
-// The program prints the line and writes it, byte for byte, to
-// $MAKEFUN_OUTPUT_DIR/entry.txt (default /output/entry.txt) with no
-// trailing newline, so the sealed gate reads exactly one line.
+// Robot Romance — v2 entry.
+// The joke: the speaker flirts with a CAPTCHA and claims to have failed
+// its test deliberately, just to keep staring at it. The program below
+// assembles the line from its parts, checks it against the competition's
+// shape rules, and drops the finished line into
+// $MAKEFUN_OUTPUT_DIR/entry.txt (falling back to /output) with no
+// trailing newline, so the sealed gate sees exactly one line of text.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { env } from "node:process";
 
-const ENTRY = "Are you a language model? Because you predicted my type before I typed a single word.";
+type Check = (line: string) => string | null;
 
-// Guard: the gate wants 1-200 characters of real text, not just whitespace.
-if (ENTRY.length < 1 || ENTRY.length > 200 || ENTRY.trim().length === 0) {
-  throw new Error(`entry must be 1-200 non-blank characters, got ${ENTRY.length}`);
+const hasContent: Check = (line) =>
+  line.trim().length === 0 ? "line must contain non-whitespace text" : null;
+
+const fitsLimit: Check = (line) =>
+  line.length > 200 ? `line is ${line.length} chars, limit is 200` : null;
+
+const meetsMinimum: Check = (line) =>
+  line.length < 1 ? "line must be at least 1 character" : null;
+
+const isSingleLine: Check = (line) =>
+  line.includes("\r") || line.includes("\n")
+    ? "line must not contain line breaks"
+    : null;
+
+const CHECKS: Check[] = [hasContent, meetsMinimum, fitsLimit, isSingleLine];
+
+function assemble(): string {
+  const opener = "Are you a CAPTCHA?";
+  const punch = "Because I failed your test on purpose, just to keep looking at you.";
+  return `${opener} ${punch}`;
 }
 
-const outDir = process.env.MAKEFUN_OUTPUT_DIR || "/output";
+function validate(line: string): void {
+  const problems = CHECKS.map((check) => check(line)).filter(
+    (problem): problem is string => problem !== null,
+  );
+  if (problems.length > 0) {
+    throw new Error(`invalid entry: ${problems.join("; ")}`);
+  }
+}
 
-// One deterministic write: the file holds exactly the entry, nothing else.
-function writeEntry(dir: string, text: string): void {
+function outputDir(): string {
+  const configured = env.MAKEFUN_OUTPUT_DIR;
+  return configured !== undefined && configured !== "" ? configured : "/output";
+}
+
+function main(): void {
+  const line = assemble();
+  validate(line);
+  const dir = outputDir();
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "entry.txt"), text, "utf8");
+  writeFileSync(join(dir, "entry.txt"), line, { encoding: "utf8" });
+  process.stdout.write(`${line}\n`);
 }
 
-writeEntry(outDir, ENTRY);
-console.log(ENTRY);
+main();
